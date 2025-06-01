@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import questionsData from '../public/Questions.json';
+import { jsPDF } from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
+import '../public/NotoSans-Regular-normal.js';
 
 function App() {
   const [answers, setAnswers] = useState({});
@@ -41,6 +44,114 @@ function App() {
       if (db) db.close();
     };
   }, []);
+
+  const generatePDF = (quiz) => {
+    try {
+      // Инициализация документа
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      // Установка шрифта (должен быть загружен заранее)
+      doc.setFont('NotoSans-Regular');
+      doc.setFontSize(12);
+
+      // Заголовок
+      doc.setFontSize(16);
+      doc.text('Результаты опроса HAQ-DI', 105, 20, { align: 'center' });
+
+      // Информация о пациенте
+      doc.setFontSize(12);
+      let yPos = 30;
+      doc.text(`Пациент: ${quiz.patientInfo.name}`, 20, yPos);
+      doc.text(`Возраст: ${quiz.patientInfo.age} лет`, 20, yPos + 10);
+      if (quiz.patientInfo.gender) {
+        doc.text(`Пол: ${quiz.patientInfo.gender === 'male' ? 'мужской' : 'женский'}`, 20, yPos + 20);
+        yPos += 10;
+      }
+      doc.text(`Дата опроса: ${quiz.date}`, 20, yPos + 20);
+      doc.text(`Общий балл: ${quiz.score}/3 (${getInterpretation(quiz.score)})`, 20, yPos + 30);
+      yPos += 35;
+
+      // Подготовка данных для таблицы
+      const body = [];
+
+      questionsData.categories.forEach((category) => {
+        // Добавляем категорию как разделитель
+        body.push([
+          {
+            content: category.category,
+            colSpan: 4,
+            styles: {
+              fillColor: [229, 231, 235], // серый фон
+              fontStyle: 'normal',
+              font: 'NotoSans-Regular',
+            },
+          },
+        ]);
+
+        // Добавляем вопросы и ответы
+        category.questions.forEach((question) => {
+          const answer =
+            quiz.answers[question.id] !== null
+              ? question.options.find((o) => o.value === quiz.answers[question.id])?.label
+              : '—';
+          const score = quiz.answers[question.id] !== null ? quiz.answers[question.id] : '';
+
+          body.push([
+            { content: question.text, styles: { font: 'NotoSans-Regular' } },
+            { content: answer, styles: { font: 'NotoSans-Regular' } },
+            { content: score, styles: { font: 'NotoSans-Regular' } },
+          ]);
+        });
+      });
+
+      // Генерация таблицы
+      autoTable(doc, {
+        head: [
+          [
+            { content: 'Вопрос', styles: { font: 'NotoSans-Regular', fontStyle: 'normal' } },
+            { content: 'Ответ', styles: { font: 'NotoSans-Regular', fontStyle: 'normal' } },
+            { content: 'Балл', styles: { font: 'NotoSans-Regular', fontStyle: 'normal' } },
+          ],
+        ],
+        body: body,
+        startY: yPos,
+        margin: { left: 20, right: 20 },
+        styles: {
+          font: 'NotoSans-Regular',
+          fontStyle: 'normal',
+          fontSize: 10,
+          cellPadding: 4,
+          overflow: 'linebreak',
+        },
+        headStyles: {
+          fillColor: [79, 70, 229], // indigo-600
+          textColor: [255, 255, 255],
+          fontStyle: 'normal',
+          font: 'NotoSans-Regular',
+        },
+        columnStyles: {
+          0: { cellWidth: 'auto' }, // Вопрос
+          1: { cellWidth: 40 }, // Ответ
+          2: { cellWidth: 20 }, // Балл
+        },
+        didDrawPage: (data) => {
+          // Номер страницы
+          doc.setFontSize(10);
+          doc.text(`Страница ${data.pageNumber}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
+        },
+      });
+
+      // Сохранение PDF
+      doc.save(`HAQ-DI_${quiz.patientInfo.name.replace(/ /g, '_')}.pdf`);
+    } catch (error) {
+      console.error('Ошибка генерации PDF:', error);
+      alert('Не удалось сгенерировать PDF-отчет');
+    }
+  };
 
   // Обработчик изменения данных пациента
   const handlePatientInfoChange = (e) => {
@@ -520,6 +631,48 @@ function App() {
                           key={quiz.id}
                           className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow relative"
                         >
+                          <div className="absolute top-2 right-2 flex space-x-2">
+                            <button
+                              onClick={() => handleDeleteQuiz(quiz.id)}
+                              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                              title="Удалить опрос"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => generatePDF(quiz)}
+                              className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                              title="Скачать PDF"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                />
+                              </svg>
+                            </button>
+                          </div>
                           <div className="px-5 py-4 bg-gray-50 border-b border-gray-200">
                             <h3 className="text-sm font-medium text-gray-900">
                               {quiz.patientInfo.name}, {quiz.patientInfo.age} лет
@@ -527,27 +680,6 @@ function App() {
                                 `, ${quiz.patientInfo.gender === 'male' ? 'мужской' : 'женский'} пол`}
                             </h3>
                           </div>
-
-                          <button
-                            onClick={() => handleDeleteQuiz(quiz.id)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
-                            title="Удалить опрос"
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
 
                           <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                             <h3 className="text-sm font-medium text-gray-900">Опрос от {quiz.date}</h3>
