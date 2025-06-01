@@ -1,12 +1,63 @@
-# React + Vite
+# HAQ-DI Calculator (Stanford Health Assessment Questionnaire)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Пример работы
 
-Currently, two official plugins are available:
+Живая версия приложения доступна по адресу:  
+[medicalhaqcalculator.netlify.app](https://medicalhaqcalculator.netlify.app/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+![HAQ-DI Calculator Screenshot](./public/Screenshot.png)
 
-## Expanding the ESLint configuration
+## Описание
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Онлайн-калькулятор для оценки функциональных ограничений по стандартизированной методике Stanford Health Assessment Questionnaire Disability Index (HAQ-DI). Приложение позволяет:
+
+- Пройти полный опросник HAQ-DI (20 вопросов по 8 категориям)
+- Сохранять результаты обследований
+- Просматривать историю оценок
+- Экспортировать результаты в PDF
+- Анализировать динамику состояния пациента
+
+## Технологии
+
+- **Frontend**: React
+- **UI**: Tailwind CSS
+- **PDF генерация**: jsPDF + jspdf-autotable
+- **Хранение данных**: IndexedDB
+- **Хостинг**: Netlify
+
+## Установка и запуск
+
+1. Клонируйте репозиторий:
+
+```bash
+git clone https://github.com/4uJustDev/medical_calculator_haq
+cd medical_calculator_haq
+```
+
+2. Установите зависимости:
+
+```bash
+npm install
+```
+
+3. Запустите приложение:
+
+```bash
+npm run dev
+```
+
+## Особенности реализации
+
+- **Полная поддержка кириллицы** в PDF отчетах
+- **Адаптивный интерфейс** для работы на любых устройствах
+- **Локальное хранение** данных (не требует сервера)
+- **Печатные формы** результатов обследования
+- **Интуитивный UX** с пошаговым прохождением опросника
+
+## Использование
+
+1. Введите данные пациента (ФИО, возраст, пол)
+2. Пройдите все вопросы опросника (20 вопросов)
+3. Просмотрите результаты с интерпретацией
+4. Сохраните результат или экспортируйте в PDF
+5. В любой момент можно просмотреть историю обследований во вкладке "Мои ответы"
