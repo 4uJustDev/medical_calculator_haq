@@ -7,6 +7,47 @@ function App() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedQuizzes, setSubmittedQuizzes] = useState([]);
   const [activeTab, setActiveTab] = useState('quiz');
+  const [db, setDb] = useState(null);
+
+  // Инициализация IndexedDB
+  useEffect(() => {
+    const request = indexedDB.open('HealthAssessmentDB', 1);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('quizzes')) {
+        db.createObjectStore('quizzes', { keyPath: 'id' });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      setDb(event.target.result);
+      loadQuizzesFromDB(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      console.error('IndexedDB error:', event.target.error);
+    };
+
+    return () => {
+      if (db) db.close();
+    };
+  }, []);
+
+  // Загрузка сохраненных опросов из IndexedDB
+  const loadQuizzesFromDB = (database) => {
+    const transaction = database.transaction(['quizzes'], 'readonly');
+    const store = transaction.objectStore('quizzes');
+    const request = store.getAll();
+
+    request.onsuccess = (event) => {
+      setSubmittedQuizzes(event.target.result || []);
+    };
+
+    request.onerror = (event) => {
+      console.error('Error loading quizzes:', event.target.error);
+    };
+  };
 
   // Инициализация состояния ответов
   useEffect(() => {
@@ -34,7 +75,30 @@ function App() {
     setCurrentCategoryIndex((prev) => prev - 1);
   };
 
-  const handleSubmit = (e) => {
+  // Сохранение опроса в IndexedDB
+  const saveQuizToDB = (quizData) => {
+    return new Promise((resolve, reject) => {
+      if (!db) {
+        reject('Database not initialized');
+        return;
+      }
+
+      const transaction = db.transaction(['quizzes'], 'readwrite');
+      const store = transaction.objectStore('quizzes');
+      const request = store.add(quizData);
+
+      request.onsuccess = () => {
+        resolve();
+      };
+
+      request.onerror = (event) => {
+        console.error('Error saving quiz:', event.target.error);
+        reject(event.target.error);
+      };
+    });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newQuiz = {
       id: Date.now(),
@@ -42,8 +106,50 @@ function App() {
       answers: { ...answers },
       score: calculateTotalScore(),
     };
-    setSubmittedQuizzes((prev) => [...prev, newQuiz]);
-    setIsSubmitted(true);
+
+    try {
+      await saveQuizToDB(newQuiz);
+      setSubmittedQuizzes((prev) => [...prev, newQuiz]);
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error('Failed to save quiz:', error);
+      alert('Не удалось сохранить результаты. Пожалуйста, попробуйте снова.');
+    }
+  };
+
+  // Удаление опроса из IndexedDB
+  const deleteQuizFromDB = async (quizId) => {
+    return new Promise((resolve, reject) => {
+      if (!db) {
+        reject('Database not initialized');
+        return;
+      }
+
+      const transaction = db.transaction(['quizzes'], 'readwrite');
+      const store = transaction.objectStore('quizzes');
+      const request = store.delete(quizId);
+
+      request.onsuccess = () => {
+        resolve();
+      };
+
+      request.onerror = (event) => {
+        console.error('Error deleting quiz:', event.target.error);
+        reject(event.target.error);
+      };
+    });
+  };
+
+  const handleDeleteQuiz = async (quizId) => {
+    if (!window.confirm('Вы уверены, что хотите удалить этот опрос?')) return;
+
+    try {
+      await deleteQuizFromDB(quizId);
+      setSubmittedQuizzes((prev) => prev.filter((quiz) => quiz.id !== quizId));
+    } catch (error) {
+      console.error('Failed to delete quiz:', error);
+      alert('Не удалось удалить опрос. Пожалуйста, попробуйте снова.');
+    }
   };
 
   const resetQuiz = () => {
@@ -79,13 +185,12 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
-        {/* Заголовок */}
         <div className="p-6 bg-gradient-to-r from-blue-500 to-indigo-600">
           <h1 className="text-3xl font-bold text-white text-center">{questionsData.questionnaire}</h1>
           <p className="text-white text-center mt-2">{questionsData.description}</p>
+          <p className="text-white text-center">Шкала: {questionsData.scale}</p>
         </div>
 
-        {/* Вкладки */}
         <div className="flex border-b border-gray-200">
           <button
             className={`flex-1 py-4 px-1 text-center border-b-2 font-medium text-sm transition-all duration-300 ${
@@ -109,13 +214,11 @@ function App() {
           </button>
         </div>
 
-        {/* Контент вкладок */}
         <div className="p-6">
           {activeTab === 'quiz' ? (
             <div className="space-y-6">
               {!isSubmitted ? (
                 <form onSubmit={handleSubmit} className="space-y-8">
-                  {/* Прогресс */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">
                       Категория {currentCategoryIndex + 1} из {questionsData.categories.length}
@@ -131,7 +234,6 @@ function App() {
                     ></div>
                   </div>
 
-                  {/* Текущая категория */}
                   <div className="space-y-2">
                     <h2 className="text-xl font-semibold text-gray-800 border-b pb-2">{currentCategory.category}</h2>
 
@@ -177,7 +279,6 @@ function App() {
                     ))}
                   </div>
 
-                  {/* Навигация */}
                   <div className="flex justify-between pt-4">
                     <button
                       type="button"
@@ -302,8 +403,29 @@ function App() {
                   {submittedQuizzes.map((quiz) => (
                     <div
                       key={quiz.id}
-                      className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+                      className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow relative"
                     >
+                      <button
+                        onClick={() => handleDeleteQuiz(quiz.id)}
+                        className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        title="Удалить опрос"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+
                       <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                         <h3 className="text-sm font-medium text-gray-900">Опрос от {quiz.date}</h3>
                         <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">
