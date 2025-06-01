@@ -1,19 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import questionsData from '../public/Questions.json';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('quiz');
-  const [answers, setAnswers] = useState({
-    question1: '',
-    question2: '',
-  });
-  const [submittedQuizzes, setSubmittedQuizzes] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedQuizzes, setSubmittedQuizzes] = useState([]);
+  const [activeTab, setActiveTab] = useState('quiz');
 
-  const handleChange = (question, value) => {
+  // Инициализация состояния ответов
+  useEffect(() => {
+    const initialAnswers = {};
+    questionsData.categories.forEach((category) => {
+      category.questions.forEach((question) => {
+        initialAnswers[question.id] = null;
+      });
+    });
+    setAnswers(initialAnswers);
+  }, []);
+
+  const handleAnswerChange = (questionId, value) => {
     setAnswers((prev) => ({
       ...prev,
-      [question]: value,
+      [questionId]: value,
     }));
+  };
+
+  const handleNextCategory = () => {
+    setCurrentCategoryIndex((prev) => prev + 1);
+  };
+
+  const handlePrevCategory = () => {
+    setCurrentCategoryIndex((prev) => prev - 1);
   };
 
   const handleSubmit = (e) => {
@@ -22,27 +40,49 @@ function App() {
       id: Date.now(),
       date: new Date().toLocaleString(),
       answers: { ...answers },
+      score: calculateTotalScore(),
     };
     setSubmittedQuizzes((prev) => [...prev, newQuiz]);
     setIsSubmitted(true);
   };
 
   const resetQuiz = () => {
-    setAnswers({
-      question1: '',
-      question2: '',
+    const resetAnswers = {};
+    Object.keys(answers).forEach((key) => {
+      resetAnswers[key] = null;
     });
+    setAnswers(resetAnswers);
+    setCurrentCategoryIndex(0);
     setIsSubmitted(false);
   };
 
-  const isFormValid = answers.question1 && answers.question2;
+  const calculateTotalScore = () => {
+    const values = Object.values(answers).filter((val) => val !== null);
+    if (values.length === 0) return 0;
+    const sum = values.reduce((acc, val) => acc + val, 0);
+    return (sum / values.length).toFixed(2);
+  };
+
+  const isCurrentCategoryComplete = () => {
+    const currentQuestions = questionsData.categories[currentCategoryIndex].questions;
+    return currentQuestions.every((question) => answers[question.id] !== null);
+  };
+
+  const isFormValid = () => {
+    return Object.values(answers).every((val) => val !== null);
+  };
+
+  const currentCategory = questionsData.categories[currentCategoryIndex];
+  const isLastCategory = currentCategoryIndex === questionsData.categories.length - 1;
+  const isFirstCategory = currentCategoryIndex === 0;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
         {/* Заголовок */}
         <div className="p-6 bg-gradient-to-r from-blue-500 to-indigo-600">
-          <h1 className="text-3xl font-bold text-white text-center">Опросник</h1>
+          <h1 className="text-3xl font-bold text-white text-center">{questionsData.questionnaire}</h1>
+          <p className="text-white text-center mt-2">{questionsData.description}</p>
         </div>
 
         {/* Вкладки */}
@@ -73,95 +113,107 @@ function App() {
         <div className="p-6">
           {activeTab === 'quiz' ? (
             <div className="space-y-6">
-              <h2 className="text-2xl font-semibold text-gray-800">Пройти опрос</h2>
-
               {!isSubmitted ? (
                 <form onSubmit={handleSubmit} className="space-y-8">
-                  {/* Вопрос 1 */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900">
-                      Вопрос 1: Какой язык программирования вам нравится больше?
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {['JavaScript', 'Python', 'Java', 'C++'].map((option) => (
-                        <label
-                          key={`q1-${option}`}
-                          className={`relative p-4 border rounded-lg cursor-pointer transition-all ${
-                            answers.question1 === option
-                              ? 'border-indigo-500 bg-indigo-50'
-                              : 'border-gray-300 hover:border-indigo-300'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="question1"
-                            value={option}
-                            checked={answers.question1 === option}
-                            onChange={() => handleChange('question1', option)}
-                            className="absolute opacity-0 h-0 w-0"
-                          />
-                          <div className="flex items-center">
-                            <div
-                              className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                answers.question1 === option ? 'border-indigo-500 bg-indigo-500' : 'border-gray-400'
-                              }`}
-                            >
-                              {answers.question1 === option && <div className="w-2 h-2 rounded-full bg-white"></div>}
-                            </div>
-                            <span className="text-gray-700">{option}</span>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
+                  {/* Прогресс */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">
+                      Категория {currentCategoryIndex + 1} из {questionsData.categories.length}
+                    </span>
+                    <span className="text-sm font-medium text-gray-700">
+                      Вопросов: {currentCategory.questions.length}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500"
+                      style={{ width: `${((currentCategoryIndex + 1) / questionsData.categories.length) * 100}%` }}
+                    ></div>
                   </div>
 
-                  {/* Вопрос 2 */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900">Вопрос 2: Какой фреймворк вы предпочитаете?</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {['React', 'Vue', 'Angular', 'Svelte'].map((option) => (
-                        <label
-                          key={`q2-${option}`}
-                          className={`relative p-4 border rounded-lg cursor-pointer transition-all ${
-                            answers.question2 === option
-                              ? 'border-indigo-500 bg-indigo-50'
-                              : 'border-gray-300 hover:border-indigo-300'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="question2"
-                            value={option}
-                            checked={answers.question2 === option}
-                            onChange={() => handleChange('question2', option)}
-                            className="absolute opacity-0 h-0 w-0"
-                          />
-                          <div className="flex items-center">
-                            <div
-                              className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                answers.question2 === option ? 'border-indigo-500 bg-indigo-500' : 'border-gray-400'
+                  {/* Текущая категория */}
+                  <div className="space-y-2">
+                    <h2 className="text-xl font-semibold text-gray-800 border-b pb-2">{currentCategory.category}</h2>
+
+                    {currentCategory.questions.map((question) => (
+                      <div key={question.id} className="space-y-4 pt-4">
+                        <h3 className="text-lg font-medium text-gray-900">{question.text}</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          {question.options.map((option) => (
+                            <label
+                              key={`q${question.id}-${option.value}`}
+                              className={`relative p-3 border rounded-lg cursor-pointer transition-all ${
+                                answers[question.id] === option.value
+                                  ? 'border-indigo-500 bg-indigo-50'
+                                  : 'border-gray-300 hover:border-indigo-300'
                               }`}
                             >
-                              {answers.question2 === option && <div className="w-2 h-2 rounded-full bg-white"></div>}
-                            </div>
-                            <span className="text-gray-700">{option}</span>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
+                              <input
+                                type="radio"
+                                name={`question-${question.id}`}
+                                value={option.value}
+                                checked={answers[question.id] === option.value}
+                                onChange={() => handleAnswerChange(question.id, option.value)}
+                                className="absolute opacity-0 h-0 w-0"
+                              />
+                              <div className="flex flex-col items-center text-center">
+                                <div
+                                  className={`w-5 h-5 rounded-full border flex items-center justify-center mb-2 ${
+                                    answers[question.id] === option.value
+                                      ? 'border-indigo-500 bg-indigo-500'
+                                      : 'border-gray-400'
+                                  }`}
+                                >
+                                  {answers[question.id] === option.value && (
+                                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                                  )}
+                                </div>
+                                <span className="text-gray-700 text-sm">{option.label}</span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
-                  {/* Кнопка отправки */}
-                  <div className="pt-4">
+                  {/* Навигация */}
+                  <div className="flex justify-between pt-4">
                     <button
-                      type="submit"
-                      disabled={!isFormValid}
-                      className={`w-full py-3 px-4 rounded-md shadow-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all ${
-                        isFormValid ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'
+                      type="button"
+                      onClick={handlePrevCategory}
+                      disabled={isFirstCategory}
+                      className={`py-2 px-4 rounded-md shadow-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all ${
+                        isFirstCategory ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
                       }`}
                     >
-                      Отправить ответы
+                      Назад
                     </button>
+
+                    {!isLastCategory ? (
+                      <button
+                        type="button"
+                        onClick={handleNextCategory}
+                        disabled={!isCurrentCategoryComplete()}
+                        className={`py-2 px-4 rounded-md shadow-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all ${
+                          !isCurrentCategoryComplete()
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
+                      >
+                        Далее
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={!isFormValid()}
+                        className={`py-2 px-4 rounded-md shadow-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all ${
+                          !isFormValid() ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+                        }`}
+                      >
+                        Завершить опрос
+                      </button>
+                    )}
                   </div>
                 </form>
               ) : (
@@ -177,19 +229,19 @@ function App() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h2 className="text-2xl font-semibold text-gray-800">Спасибо за участие!</h2>
+                  <h2 className="text-2xl font-semibold text-gray-800">Опрос завершен!</h2>
                   <div className="bg-gray-50 p-6 rounded-lg space-y-4 text-left">
-                    <h3 className="font-medium text-gray-900">Ваши ответы:</h3>
-                    <ul className="space-y-2">
-                      <li className="flex">
-                        <span className="text-gray-600 w-32">Вопрос 1:</span>
-                        <span className="font-medium">{answers.question1}</span>
-                      </li>
-                      <li className="flex">
-                        <span className="text-gray-600 w-32">Вопрос 2:</span>
-                        <span className="font-medium">{answers.question2}</span>
-                      </li>
-                    </ul>
+                    <h3 className="font-medium text-gray-900">Результаты:</h3>
+                    <p className="text-lg">
+                      <span className="font-semibold">Общий балл:</span> {calculateTotalScore()}/3
+                    </p>
+                    <div className="w-full bg-gray-200 rounded-full h-4">
+                      <div
+                        className="bg-indigo-600 h-4 rounded-full"
+                        style={{ width: `${(calculateTotalScore() / 3) * 100}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-gray-600">{getInterpretation(calculateTotalScore())}</p>
                   </div>
                   <button
                     onClick={resetQuiz}
@@ -252,20 +304,44 @@ function App() {
                       key={quiz.id}
                       className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
                     >
-                      <div className="px-5 py-4 bg-gray-50 border-b border-gray-200">
+                      <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                         <h3 className="text-sm font-medium text-gray-900">Опрос от {quiz.date}</h3>
+                        <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">
+                          Балл: {quiz.score}/3
+                        </span>
                       </div>
                       <div className="px-5 py-4">
-                        <ul className="space-y-3">
-                          <li className="flex">
-                            <span className="text-gray-600 w-32">Вопрос 1:</span>
-                            <span className="font-medium">{quiz.answers.question1}</span>
-                          </li>
-                          <li className="flex">
-                            <span className="text-gray-600 w-32">Вопрос 2:</span>
-                            <span className="font-medium">{quiz.answers.question2}</span>
-                          </li>
-                        </ul>
+                        <div className="mb-4">
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Уровень ограничений:</span>
+                            <span>{getInterpretation(quiz.score)}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div
+                              className="bg-indigo-600 h-2.5 rounded-full"
+                              style={{ width: `${(quiz.score / 3) * 100}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {questionsData.categories.map((category) => (
+                            <div key={category.category} className="space-y-2">
+                              <h4 className="font-medium text-gray-900">{category.category}</h4>
+                              <ul className="space-y-1">
+                                {category.questions.map((question) => (
+                                  <li key={question.id} className="flex justify-between text-sm">
+                                    <span className="text-gray-600 truncate max-w-[180px]">{question.text}</span>
+                                    <span className="font-medium">
+                                      {quiz.answers[question.id] !== null
+                                        ? question.options.find((o) => o.value === quiz.answers[question.id])?.label
+                                        : '—'}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -277,6 +353,14 @@ function App() {
       </div>
     </div>
   );
+}
+
+function getInterpretation(score) {
+  const numScore = parseFloat(score);
+  if (numScore === 0) return 'Нет ограничений';
+  if (numScore <= 1) return 'Легкие ограничения';
+  if (numScore <= 2) return 'Умеренные ограничения';
+  return 'Тяжелые ограничения';
 }
 
 export default App;
